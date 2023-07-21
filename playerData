@@ -1,0 +1,58 @@
+local Players = game:GetService("Players")
+local serverScriptService = game:GetService("ServerScriptService")
+local libs = serverScriptService:WaitForChild("libs")
+
+local template = require(script.Parent:WaitForChild("template"))
+local manager = require(script.Parent:WaitForChild("manager"))
+local profileService = require(libs:WaitForChild("ProfileService"))
+
+local profileStore = profileService.GetProfileStore("Player_Data", template)
+
+local errMessage = "Data issue, try again shortly! If this issue persists, don't be afraid to contact us immediately!"
+
+local function initLeaderstats(player)
+	local profile = manager.getProfile(player.UserId)
+	if not profile then return end
+	
+	local data = manager.getData(profile)
+	local stats = data:getStats()
+	
+	local leaderstats = Instance.new("Folder", player)
+	leaderstats.Name = "leaderstats"
+	
+	for i, v in pairs(template.stats) do
+		local name = string.upper(string.sub(i, 1, 1)) .. string.sub(i, 2, string.len(i))
+		
+		local stat = Instance.new("NumberValue", leaderstats)
+		stat.Name = name
+		stat.Value = stats:get(i):getValue()
+		stat.Changed:Connect(function(newValue)
+			stats:get(i):setValue(newValue)
+		end)
+	end
+end
+
+local function playerAdded(player: Player)
+	local profile = profileStore:LoadProfileAsync("Player_" .. player.UserId)
+	
+	if profile == nil then
+		player:Kick(errMessage)
+		return
+	end
+	
+	profile:AddUserId(player.UserId)
+	profile:Reconcile()
+	profile:ListenToRelease(function()
+		manager.removeProfile(player.UserId)
+		player:Kick(errMessage)
+	end)
+	
+	if player:IsDescendantOf(Players) then
+		manager.addProfile(player.UserId, profile)
+		initLeaderstats(player)
+	else
+		profile:Release()
+	end
+end
+
+Players.PlayerAdded:Connect(playerAdded)
